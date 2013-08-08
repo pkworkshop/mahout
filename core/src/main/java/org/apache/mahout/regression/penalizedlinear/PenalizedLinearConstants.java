@@ -26,4 +26,8 @@ public class PenalizedLinearConstants {
   public static final double LAMBDA_RATIO = 1E-3;
   public static final double LAMBDA_MULTIPLIER = 1.05;
   public static final double RULE_OF_THUMB = 0.5;
+
+  private PenalizedLinearConstants() {
+    // Empty for ensuring that this class cannot be instantiated.
+  }
 }

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.mahout.regression.feature.extractor;
+package org.apache.mahout.regression.extractor;
 
 public class FeatureExtractorKeySet {
   public static final String FEATURE_NAMES = "org.apache.mahout.regression.feature.extractor.feature.names";
@@ -23,4 +23,8 @@ public class FeatureExtractorKeySet {
   public static final String SELECTED_INDEPENDENT = "org.apache.mahout.regression.feature.extractor.selected.independent";
   public static final String SELECTED_DEPENDENT = "org.apache.mahout.regression.feature.extractor.selected.dependent";
   public static final String SEPARATOR = "org.apache.mahout.regression.feature.extractor.separator";
+
+  private FeatureExtractorKeySet() {
+    // Empty for ensuring that this class cannot be instantiated.
+  }
 }
