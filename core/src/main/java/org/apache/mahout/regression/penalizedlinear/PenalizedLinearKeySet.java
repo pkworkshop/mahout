@@ -22,4 +22,8 @@ public class PenalizedLinearKeySet {
   public static final String ALPHA = "org.apache.mahout.regression.penalized.linear.alpha";
   public static final String LAMBDA = "org.apache.mahout.regression.penalized.linear.lambda";
   public static final String INTERCEPT = "org.apache.mahout.regression.penalized.linear.intercept";
+
+  private PenalizedLinearKeySet() {
+    // Empty for ensuring that this class cannot be instantiated.
+  }
 }

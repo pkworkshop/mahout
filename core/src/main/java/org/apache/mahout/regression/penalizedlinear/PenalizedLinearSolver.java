@@ -17,6 +17,7 @@
 
 package org.apache.mahout.regression.penalizedlinear;
 
+import com.google.common.collect.Lists;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -32,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 public class PenalizedLinearSolver {
@@ -85,7 +85,7 @@ public class PenalizedLinearSolver {
   private void setLambda() {
     String[] lambdaSeq = lambdaString.split(",");
     lambda = new double[lambdaSeq.length];
-    for(int i = 0;i < lambda.length; ++i) {
+    for (int i = 0; i < lambda.length; ++i) {
       lambda[i] = Double.valueOf(lambdaSeq[i]);
     }
   }
@@ -95,40 +95,37 @@ public class PenalizedLinearSolver {
     double[] correlation = new double[dimension];
     double ratio = 0;
     ratio = Math.max(alpha, PenalizedLinearConstants.ALPHA_THRESHOLD);
-    if(intercept) {
-      for(int i = 0;i < dimension; ++i) {
+    if (intercept) {
+      for (int i = 0; i < dimension; ++i) {
         correlation[i] = Math.abs(wholeData.trainXY[i] - wholeData.trainX[i] * wholeData.trainY);
       }
-      for(int i = 0;i < dimension; ++i) {
-        if(wholeData.trainXcXc[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
+      for (int i = 0; i < dimension; ++i) {
+        if (wholeData.trainXcXc[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
           correlation[i] = 0;
-        }
-        else {
+        } else {
           correlation[i] /= (Math.sqrt(wholeData.trainXcXc[i][i]) * ratio);
         }
       }
-    }
-    else {
-      for(int i = 0;i < dimension; ++i) {
+    } else {
+      for (int i = 0; i < dimension; ++i) {
         correlation[i] = Math.abs(wholeData.trainXY[i]);
       }
-      for(int i = 0;i < dimension; ++i) {
-        if(wholeData.trainXcXc[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
+      for (int i = 0; i < dimension; ++i) {
+        if (wholeData.trainXcXc[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
           correlation[i] = 0;
-        }
-        else {
+        } else {
           correlation[i] /= (Math.sqrt(wholeData.trainXcXc[i][i]) * ratio);
         }
       }
     }
     int index = 0;
-    for(int i = 1;i < correlation.length; ++i) {
-      if(correlation[index] < correlation[i]) {
+    for (int i = 1; i < correlation.length; ++i) {
+      if (correlation[index] < correlation[i]) {
         index = i;
       }
     }
     double lambdaMin = correlation[index] * PenalizedLinearConstants.LAMBDA_RATIO * PenalizedLinearConstants.LAMBDA_MULTIPLIER;
-    for(int i = 0;i < lambda.length; ++i) {
+    for (int i = 0; i < lambda.length; ++i) {
       lambda[i] = lambdaMin * Math.exp(Math.log(PenalizedLinearConstants.LAMBDA_RATIO) / (lambda.length - 1) * i * (-1));
     }
   }
@@ -152,35 +149,36 @@ public class PenalizedLinearSolver {
       trainError = 0.0;
       testError = 0.0;
     }
+
     public double trainError;
     public double testError;
   }
 
   private TrainTestError averageSumOfSquare(TrainTestData trainTestData, double[] beta, double beta0) {
     TrainTestError trainTestError = new TrainTestError();
-    for(int i = 0;i < dimension; ++i) {
-      for(int j = 0;j < dimension; ++j) {
+    for (int i = 0; i < dimension; ++i) {
+      for (int j = 0; j < dimension; ++j) {
         trainTestError.trainError += trainTestData.trainXcXc[i][j] * beta[i] * beta[j];
         trainTestError.trainError += trainTestData.trainX[i] * trainTestData.trainX[j] * beta[i] * beta[j];
       }
     }
 
-    for(int i = 0;i < dimension; ++i) {
+    for (int i = 0; i < dimension; ++i) {
       trainTestError.trainError -= 2 * beta[i] * (trainTestData.trainXY[i] - beta0 * trainTestData.trainX[i]);
     }
 
     trainTestError.trainError += (trainTestData.trainYY - 2 * beta0 * trainTestData.trainY + beta0 * beta0);
     trainTestError.trainError = Math.max(0.0, trainTestError.trainError);
 
-    if(trainTestData.testXcXc != null) {
-      for(int i = 0;i < dimension; ++i) {
-        for(int j = 0;j < dimension; ++j) {
+    if (trainTestData.testXcXc != null) {
+      for (int i = 0; i < dimension; ++i) {
+        for (int j = 0; j < dimension; ++j) {
           trainTestError.testError += trainTestData.testXcXc[i][j] * beta[i] * beta[j];
           trainTestError.testError += trainTestData.testX[i] * trainTestData.testX[j] * beta[i] * beta[j];
         }
       }
 
-      for(int i = 0;i < dimension; ++i) {
+      for (int i = 0; i < dimension; ++i) {
         trainTestError.testError -= 2 * beta[i] * (trainTestData.testXY[i] - beta0 * trainTestData.testX[i]);
       }
 
@@ -192,6 +190,7 @@ public class PenalizedLinearSolver {
 
   /**
    * compute the regularized path of the coefficients with \lambda sequence.
+   *
    * @param lambda
    */
   public void regularizePath(double[] lambda) {
@@ -201,57 +200,54 @@ public class PenalizedLinearSolver {
   private void regularizePath(TrainTestData trainTestData, double[] lambdas, double alpha) {
     boolean[] mask = new boolean[dimension];
     coefficients = new Coefficients[lambdas.length];
-    for(int i = 0;i < coefficients.length; ++i) {
+    for (int i = 0; i < coefficients.length; ++i) {
       coefficients[i] = new Coefficients();
     }
-    if(intercept) {
+    if (intercept) {
       for (int i = 0; i < dimension; ++i) {
         if (trainTestData.trainXcXc[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
           mask[i] = false;
-        }
-        else {
+        } else {
           mask[i] = true;
         }
       }
       double[] beta = new double[dimension];
       double[][] A = trainTestData.trainXcXc;
       double[] B = new double[dimension];
-      for(int i = 0;i < dimension; ++i) {
+      for (int i = 0; i < dimension; ++i) {
         B[i] = trainTestData.trainXY[i] - trainTestData.trainX[i] * trainTestData.trainY;
       }
       double beta0 = 0.0;
-      for(int i = 0;i < lambdas.length; ++i) {
+      for (int i = 0; i < lambdas.length; ++i) {
         beta = coordinateDescentSolver(trainTestData, A, B, alpha, lambdas[i], beta, mask);
         beta0 = trainTestData.trainY;
-        for(int j = 0;j < dimension; ++j) {
+        for (int j = 0; j < dimension; ++j) {
           beta0 -= trainTestData.trainX[j] * beta[j];
         }
         coefficients[i].beta = beta;
         coefficients[i].beta0 = beta0;
       }
-    }
-    else {
+    } else {
       double[] beta = new double[dimension];
       double[][] A = new double[dimension][dimension];
       double[] B = trainTestData.trainXY;
-      for(int i = 0;i < dimension; ++i) {
+      for (int i = 0; i < dimension; ++i) {
         A[i][i] = trainTestData.trainXcXc[i][i] + trainTestData.trainX[i] * trainTestData.trainX[i];
-        for(int j = i + 1;j < dimension; ++j) {
+        for (int j = i + 1; j < dimension; ++j) {
           A[i][j] = trainTestData.trainXcXc[i][j] + trainTestData.trainX[i] * trainTestData.trainX[j];
           A[j][i] = A[i][j];
         }
       }
-      for(int i = 0;i < dimension; ++i) {
-        if(A[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
+      for (int i = 0; i < dimension; ++i) {
+        if (A[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
           mask[i] = false;
-        }
-        else {
+        } else {
           mask[i] = true;
         }
       }
 
       double beta0 = 0.0;
-      for(int i = 0;i < lambdas.length; ++i) {
+      for (int i = 0; i < lambdas.length; ++i) {
         beta = coordinateDescentSolver(trainTestData, A, B, alpha, lambdas[i], beta, mask);
         coefficients[i].beta = beta;
         coefficients[i].beta0 = beta0;
@@ -262,54 +258,51 @@ public class PenalizedLinearSolver {
   private TrainTestError[] linearSolver(TrainTestData trainTestData, double[] lambdas, double alpha) {
     TrainTestError[] trainTestError = new TrainTestError[lambdas.length];
     boolean[] mask = new boolean[dimension];
-    if(intercept) {
+    if (intercept) {
       for (int i = 0; i < dimension; ++i) {
         if (trainTestData.trainXcXc[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
           mask[i] = false;
-        }
-        else {
+        } else {
           mask[i] = true;
         }
       }
       double[] beta = new double[dimension];
       double[][] A = trainTestData.trainXcXc;
       double[] B = new double[dimension];
-      for(int i = 0;i < dimension; ++i) {
+      for (int i = 0; i < dimension; ++i) {
         B[i] = trainTestData.trainXY[i] - trainTestData.trainX[i] * trainTestData.trainY;
       }
 
       double beta0 = 0.0;
-      for(int i = 0;i < lambdas.length; ++i) {
+      for (int i = 0; i < lambdas.length; ++i) {
         beta = coordinateDescentSolver(trainTestData, A, B, alpha, lambdas[i], beta, mask);
         beta0 = trainTestData.trainY;
-        for(int j = 0;j < dimension; ++j) {
+        for (int j = 0; j < dimension; ++j) {
           beta0 -= trainTestData.trainX[j] * beta[j];
         }
         trainTestError[i] = averageSumOfSquare(trainTestData, beta, beta0);
       }
-    }
-    else {
+    } else {
       double[] beta = new double[dimension];
       double[][] A = new double[dimension][dimension];
       double[] B = trainTestData.trainXY;
-      for(int i = 0;i < dimension; ++i) {
+      for (int i = 0; i < dimension; ++i) {
         A[i][i] = trainTestData.trainXcXc[i][i] + trainTestData.trainX[i] * trainTestData.trainX[i];
-        for(int j = i + 1;j < dimension; ++j) {
+        for (int j = i + 1; j < dimension; ++j) {
           A[i][j] = trainTestData.trainXcXc[i][j] + trainTestData.trainX[i] * trainTestData.trainX[j];
           A[j][i] = A[i][j];
         }
       }
-      for(int i = 0;i < dimension; ++i) {
-        if(A[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
+      for (int i = 0; i < dimension; ++i) {
+        if (A[i][i] < PenalizedLinearConstants.MINIMUM_VARIANCE) {
           mask[i] = false;
-        }
-        else {
+        } else {
           mask[i] = true;
         }
       }
 
       double beta0 = 0.0;
-      for(int i = 0;i < lambdas.length; ++i) {
+      for (int i = 0; i < lambdas.length; ++i) {
         beta = coordinateDescentSolver(trainTestData, A, B, alpha, lambdas[i], beta, mask);
         trainTestError[i] = averageSumOfSquare(trainTestData, beta, beta0);
       }
@@ -347,7 +340,7 @@ public class PenalizedLinearSolver {
           }
           double r = lambda * alpha * Math.sqrt(trainTestData.trainXcXc[j][j]);
           betaUpdate[j] = Math.signum(z) * Math.max(Math.abs(z) - r, 0.0)
-                  / (A[j][j] + trainTestData.trainXcXc[j][j] * lambda * (1.0 - alpha));
+              / (A[j][j] + trainTestData.trainXcXc[j][j] * lambda * (1.0 - alpha));
         }
       }
       if (averageSquareError(betaUpdate, betaPrevious) < PenalizedLinearConstants.CONVERGENCE_THRESHOLD) {
@@ -426,7 +419,7 @@ public class PenalizedLinearSolver {
   }
 
   private TrainTestData fillTrainTest(TrainTestData[] trainTestData, List<Vector> dataTable) {
-    for(int i = 0;i < trainTestData.length; ++i) {
+    for (int i = 0; i < trainTestData.length; ++i) {
       trainTestData[i] = new TrainTestData();
     }
 
@@ -451,18 +444,18 @@ public class PenalizedLinearSolver {
       for (int i = 0; i < dimension; ++i) {
         for (int j = i; j < dimension; ++j) {
           rowMatrix[index] = (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) * rowMatrix[index] +
-                  vector.get(valueLen - 1) / rowMatrix[valueLen - 1] * vector.get(index) +
-                  (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
-                          (vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
-                          (rowMatrix[dimension + 1 + i] - vector.get(dimension + 1 + i)) *
-                          (rowMatrix[dimension + 1 + j] - vector.get(dimension + 1 + j));
+              vector.get(valueLen - 1) / rowMatrix[valueLen - 1] * vector.get(index) +
+              (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
+                  (vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
+                  (rowMatrix[dimension + 1 + i] - vector.get(dimension + 1 + i)) *
+                  (rowMatrix[dimension + 1 + j] - vector.get(dimension + 1 + j));
           ++index;
         }
       }
       rowMatrix[index] = rowMatrix[index] + vector.get(valueLen - 1) / (rowMatrix[valueLen - 1]) * (vector.get(index) - rowMatrix[index]);
       for (int i = 0; i < dimension; ++i) {
         rowMatrix[dimension + 1 + i] = rowMatrix[dimension + 1 + i] +
-                vector.get(valueLen - 1) / (rowMatrix[valueLen - 1]) * (vector.get(dimension + 1 + i) - rowMatrix[dimension + 1 + i]);
+            vector.get(valueLen - 1) / (rowMatrix[valueLen - 1]) * (vector.get(dimension + 1 + i) - rowMatrix[dimension + 1 + i]);
       }
     }
     TrainTestData wholeData = new TrainTestData();
@@ -490,18 +483,18 @@ public class PenalizedLinearSolver {
         for (int i = 0; i < dimension; ++i) {
           for (int j = i; j < dimension; ++j) {
             rowMatrix[index] = (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) * rowMatrix[index] +
-                    vector.get(valueLen - 1) / rowMatrix[valueLen - 1] * vector.get(index) +
-                    (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
-                            (vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
-                            (rowMatrix[dimension + 1 + i] - vector.get(dimension + 1 + i)) *
-                            (rowMatrix[dimension + 1 + j] - vector.get(dimension + 1 + j));
+                vector.get(valueLen - 1) / rowMatrix[valueLen - 1] * vector.get(index) +
+                (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
+                    (vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
+                    (rowMatrix[dimension + 1 + i] - vector.get(dimension + 1 + i)) *
+                    (rowMatrix[dimension + 1 + j] - vector.get(dimension + 1 + j));
             ++index;
           }
         }
         rowMatrix[index] = rowMatrix[index] + vector.get(valueLen - 1) / (rowMatrix[valueLen - 1]) * (vector.get(index) - rowMatrix[index]);
         for (int i = 0; i < dimension; ++i) {
           rowMatrix[dimension + 1 + i] = rowMatrix[dimension + 1 + i] +
-                  vector.get(valueLen - 1) / (rowMatrix[valueLen - 1]) * (vector.get(dimension + 1 + i) - rowMatrix[dimension + 1 + i]);
+              vector.get(valueLen - 1) / (rowMatrix[valueLen - 1]) * (vector.get(dimension + 1 + i) - rowMatrix[dimension + 1 + i]);
         }
       }
       Vector train = new RandomAccessSparseVector(valueLen);
@@ -525,7 +518,7 @@ public class PenalizedLinearSolver {
     FileSystem fs = FileSystem.get(config);
     FileStatus[] status = fs.listStatus(output);
 
-    List<Vector> dataTable = new ArrayList<Vector>();
+    List<Vector> dataTable = Lists.newArrayList();
     for (int i = 0; i < status.length; ++i) {
       if (PathFilters.partFilter().accept(status[i].getPath())) {
         SequenceFile.Reader reader = new SequenceFile.Reader(fs, status[i].getPath(), config);
@@ -540,14 +533,13 @@ public class PenalizedLinearSolver {
 
     trainTestData = new TrainTestData[dataTable.size()];
     wholeData = fillTrainTest(trainTestData, dataTable);
-    if(wholeData == null) {
+    if (wholeData == null) {
       wholeData = trainTestData[0];
     }
 
-    if(lambdaString.equals("")) {
+    if (lambdaString.equals("")) {
       setDefaultLambda();
-    }
-    else {
+    } else {
       setLambda();
     }
   }
@@ -556,19 +548,19 @@ public class PenalizedLinearSolver {
    * Train the model with cross validation.
    */
   public void crossValidate() {
-    if(lambda.length == 1) {
+    if (lambda.length == 1) {
       log.warn("lambda sequence has length 1.");
     }
-    if(trainTestData.length == 1) {
+    if (trainTestData.length == 1) {
       log.warn("numOfCV = 1: cross validation is not performed. Please ignore the testing error column in the output");
     }
 
     trainError = new double[lambda.length];
     testError = new double[lambda.length];
     double[] testStd = new double[lambda.length];
-    for(int i = 0;i < trainTestData.length; ++i) {
+    for (int i = 0; i < trainTestData.length; ++i) {
       TrainTestError[] trainTestErrors = linearSolver(trainTestData[i], lambda, alpha);
-      for(int j = 0;j < lambda.length; ++j) {
+      for (int j = 0; j < lambda.length; ++j) {
         trainError[j] += trainTestErrors[j].trainError / trainTestData.length;
         testError[j] += trainTestErrors[j].testError / trainTestData.length;
         testStd[j] += Math.pow(trainTestErrors[j].testError, 2.0);
@@ -576,23 +568,23 @@ public class PenalizedLinearSolver {
     }
 
     int optIndex = 0;
-    for(int i = 1;i < lambda.length; ++i) {
-      if(testError[optIndex] > testError[i]) {
+    for (int i = 1; i < lambda.length; ++i) {
+      if (testError[optIndex] > testError[i]) {
         optIndex = i;
       }
     }
     optLambda = new double[1];
     double std = Math.sqrt(Math.max(testStd[optIndex] -
-            trainTestData.length * Math.pow(testError[optIndex], 2.0), 0) /
-            trainTestData.length);
-    for(int i = lambda.length - 1; i >= 0; --i) {
-      if(testError[i] <= testError[optIndex] + std * PenalizedLinearConstants.RULE_OF_THUMB) {
+        trainTestData.length * Math.pow(testError[optIndex], 2.0), 0) /
+        trainTestData.length);
+    for (int i = lambda.length - 1; i >= 0; --i) {
+      if (testError[i] <= testError[optIndex] + std * PenalizedLinearConstants.RULE_OF_THUMB) {
         optIndex = i;
         break;
       }
     }
     optLambda[0] = lambda[optIndex];
-    if(trainTestData.length == 1) {
+    if (trainTestData.length == 1) {
       optLambda[0] = lambda[0];
     }
     regularizePath(optLambda);

@@ -17,6 +17,7 @@
 
 package org.apache.mahout.regression.penalizedlinear;
 
+import com.google.common.collect.Maps;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -27,7 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -38,18 +39,20 @@ public class PenalizedLinearMapper extends Mapper<WritableComparable<?>, VectorW
   private static final Logger log = LoggerFactory.getLogger(PenalizedLinearMapper.class);
   int numberOfCV = 0;
   Random rand = new Random();
-  HashMap<String, double[]> rowMatrix;
+  Map<String, double[]> rowMatrix;
   int dimension;
   int valueLen;
 
   @Override
   protected void map(WritableComparable<?> key, VectorWritable value, Context context) throws IOException, InterruptedException {
     if (rowMatrix == null) {
-      rowMatrix = new HashMap<String, double[]>();
+      rowMatrix = Maps.newHashMap();
       numberOfCV = context.getConfiguration().getInt(PenalizedLinearKeySet.NUM_CV, 1);
       dimension = value.get().size() - 1;
       if (dimension <= 0) {
-        log.error("Fatal: Input file format is wrong!", new IOException("Fatal: Input file format is wrong!"));
+        String err = "Fatal: Input file has dimension <= 0!";
+        log.error(err);
+        throw (new IOException(err));
       }
       valueLen = (5 * dimension + dimension * dimension) / 2 + 3;
       for (int i = 0; i < numberOfCV; ++i) {
@@ -68,20 +71,20 @@ public class PenalizedLinearMapper extends Mapper<WritableComparable<?>, VectorW
     int index = 0;
     for (int jj = 1; jj < dimension + 1; ++jj) {
       emitValue[index] = emitValue[index] +
-              (sample.get(jj) * y - emitValue[index]) / emitValue[valueLen - 1];
+          (sample.get(jj) * y - emitValue[index]) / emitValue[valueLen - 1];
       ++index;
     }
 
     emitValue[index] = emitValue[index] +
-            (y - emitValue[index]) / emitValue[valueLen - 1];
+        (y - emitValue[index]) / emitValue[valueLen - 1];
     ++index;
     index += dimension;
     for (int jj = 1; jj < dimension + 1; ++jj) {
       for (int kk = jj; kk < dimension + 1; ++kk) {
         emitValue[index] = emitValue[index] * (1 - 1.0 / emitValue[valueLen - 1]) +
-                (emitValue[dimension + jj] - sample.get(jj)) *
-                        (emitValue[dimension + kk] - sample.get(kk)) *
-                        (1 - 1.0 / emitValue[valueLen - 1]) / emitValue[valueLen - 1];
+            (emitValue[dimension + jj] - sample.get(jj)) *
+                (emitValue[dimension + kk] - sample.get(kk)) *
+                (1 - 1.0 / emitValue[valueLen - 1]) / emitValue[valueLen - 1];
         ++index;
       }
     }

@@ -53,9 +53,8 @@ public class PenalizedLinearDriver extends AbstractJob {
   private PenalizedLinearParameter parameter;
   private String input;
   private String output;
-  private PenalizedLinearSolver solver = new PenalizedLinearSolver();
 
-  protected class PenalizedLinearParameter {
+  private class PenalizedLinearParameter {
     private int numOfCV;
     private float alpha;
     private String lambda;
@@ -100,9 +99,9 @@ public class PenalizedLinearDriver extends AbstractJob {
 
   @Override
   public int run(String[] args) throws Exception {
-    if(parseArgs(args)) {
-      buildRegressionModelMR(getConf(), parameter, new Path(input), new Path(output));
-      solver = new PenalizedLinearSolver();
+    if (parseArgs(args)) {
+      buildRegressionModelMR(parameter, new Path(input), new Path(output));
+      PenalizedLinearSolver solver = new PenalizedLinearSolver();
       solver.setAlpha(parameter.alpha);
       solver.setIntercept(parameter.intercept);
       solver.setLambdaString(parameter.lambda);
@@ -122,45 +121,44 @@ public class PenalizedLinearDriver extends AbstractJob {
   }
 
   private void printInfo(PenalizedLinearParameter parameter, PenalizedLinearSolver solver, String method) {
-    if(method.equals("path")) {
+    if (method.equals("path")) {
       PenalizedLinearSolver.Coefficients[] coefficients = solver.getCoefficients();
       System.out.println("The training path: lambda    beta0    beta");
       double[] lambdas = solver.getLambda();
-      for(int i = 0; i < coefficients.length; ++i) {
-        String line = "" + String.format("%" + Integer.toString(formatWidth) + ".5f", lambdas[i]);
-        line += " " + String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients[i].beta0);
-        for(int j = 0;j < coefficients[i].beta.length; ++j) {
-          line += " " + String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients[i].beta[j]);
+      for (int i = 0; i < coefficients.length; ++i) {
+        StringBuilder line = new StringBuilder(String.format("%" + Integer.toString(formatWidth) + ".5f", lambdas[i]));
+        line.append(" ").append(String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients[i].beta0));
+        for (int j = 0; j < coefficients[i].beta.length; ++j) {
+          line.append(" ").append(String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients[i].beta[j]));
         }
         System.out.println(line);
       }
-    }
-    else {
+    } else {
       PenalizedLinearSolver.Coefficients coefficients = solver.getCoefficients()[0];
       double[] trainError = solver.getTrainError();
       double[] testError = solver.getTestError();
       double[] lambdas = solver.getLambda();
 
       System.out.println("Training and Test Error: lambda    training    testing");
-      for(int i = 0; i < lambdas.length; ++i) {
-        String line = "" + String.format("%" + Integer.toString(formatWidth) + ".5f", lambdas[i]) + " " + String.format("%" + Integer.toString(formatWidth) + ".5f", trainError[i]) +
-                " " + String.format("%" + Integer.toString(formatWidth) + ".5f", testError[i]);
+      for (int i = 0; i < lambdas.length; ++i) {
+        StringBuilder line = new StringBuilder(String.format("%" + Integer.toString(formatWidth) + ".5f", lambdas[i]) +
+            " " + String.format("%" + Integer.toString(formatWidth) + ".5f", trainError[i]) +
+            " " + String.format("%" + Integer.toString(formatWidth) + ".5f", testError[i]));
         System.out.println(line);
       }
 
-      String model = "model: ";
-      String coefficientString = "";
-      if(parameter.intercept) {
-        model += "beta0    beta";
-        coefficientString += String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients.beta0);
-        for(int i = 0;i < coefficients.beta.length; ++i) {
-          coefficientString += " " + String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients.beta[i]);
+      StringBuilder model = new StringBuilder("model: ");
+      StringBuilder coefficientString = new StringBuilder();
+      if (parameter.intercept) {
+        model.append("beta0    beta");
+        coefficientString.append(String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients.beta0));
+        for (int i = 0; i < coefficients.beta.length; ++i) {
+          coefficientString.append(" ").append(String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients.beta[i]));
         }
-      }
-      else {
-        model += "beta";
-        for(int i = 0;i < coefficients.beta.length; ++i) {
-          coefficientString += " " + String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients.beta[i]);
+      } else {
+        model.append("beta");
+        for (int i = 0; i < coefficients.beta.length; ++i) {
+          coefficientString.append(" ").append(String.format("%" + Integer.toString(formatWidth) + ".5f", coefficients.beta[i]));
         }
       }
       System.out.println(model);
@@ -170,34 +168,34 @@ public class PenalizedLinearDriver extends AbstractJob {
     }
   }
 
-  private static Path buildRegressionModelMR(Configuration conf, PenalizedLinearParameter parameter, Path input, Path output)
-          throws IOException, InterruptedException, ClassNotFoundException {
+  private void buildRegressionModelMR(PenalizedLinearParameter parameter, Path input, Path output)
+      throws IOException, InterruptedException, ClassNotFoundException {
 
+    Job job = prepareJob(
+        input,
+        output,
+        SequenceFileInputFormat.class,
+        PenalizedLinearMapper.class,
+        Text.class,
+        VectorWritable.class,
+        PenalizedLinearReducer.class,
+        Text.class,
+        VectorWritable.class,
+        SequenceFileOutputFormat.class
+    );
+    job.setJobName("Penalized Linear Regression Driver running over input: " + input);
+    job.setNumReduceTasks(1);
+    job.setJarByClass(PenalizedLinearDriver.class);
+
+    Configuration conf = job.getConfiguration();
     conf.setInt(PenalizedLinearKeySet.NUM_CV, parameter.getNumOfCV());
     conf.setFloat(PenalizedLinearKeySet.ALPHA, parameter.getAlpha());
     conf.set(PenalizedLinearKeySet.LAMBDA, parameter.getLambda());
     conf.setBoolean(PenalizedLinearKeySet.INTERCEPT, parameter.isIntercept());
 
-    Job job = new Job(conf, "Penalized Linear Regression Driver running over input: " + input);
-    job.setInputFormatClass(SequenceFileInputFormat.class);
-    job.setOutputFormatClass(SequenceFileOutputFormat.class);
-    job.setMapperClass(PenalizedLinearMapper.class);
-    job.setMapOutputKeyClass(Text.class);
-    job.setMapOutputValueClass(VectorWritable.class);
-    job.setReducerClass(PenalizedLinearReducer.class);
-    job.setOutputKeyClass(Text.class);
-    job.setOutputValueClass(VectorWritable.class);
-    job.setCombinerClass(PenalizedLinearReducer.class);
-    job.setNumReduceTasks(1);
-    job.setJarByClass(PenalizedLinearDriver.class);
-
-    FileInputFormat.addInputPath(job, input);
-    Path penalizedLinearOutputDir = output;
-    FileOutputFormat.setOutputPath(job, penalizedLinearOutputDir);
     if (!job.waitForCompletion(true)) {
       throw new InterruptedException("Penalized Linear Regression Job failed processing " + input);
     }
-    return penalizedLinearOutputDir;
   }
 
   private boolean parseArgs(String[] args) {
@@ -207,46 +205,46 @@ public class PenalizedLinearDriver extends AbstractJob {
 
     ArgumentBuilder argumentBuilder = new ArgumentBuilder();
     Option inputFile = builder.withLongName("input")
-            .withRequired(true)
-            .withArgument(argumentBuilder.withName("input").withMaximum(1).create())
-            .withDescription("where to get training data (Mahout sequence file of VectorWritable); in each line, the first element is response; rest are predictors.")
-            .create();
+        .withRequired(true)
+        .withArgument(argumentBuilder.withName("input").withMaximum(1).create())
+        .withDescription("where to get training data (Mahout sequence file of VectorWritable); in each line, the first element is response; rest are predictors.")
+        .create();
 
     Option outputFile = builder.withLongName("output")
-            .withRequired(true)
-            .withArgument(argumentBuilder.withName("output").withMaximum(1).create())
-            .withDescription("where to get results")
-            .create();
+        .withRequired(true)
+        .withArgument(argumentBuilder.withName("output").withMaximum(1).create())
+        .withDescription("where to get results")
+        .create();
 
     Option lambda = builder.withLongName("lambda")
-            .withArgument(argumentBuilder.withName("lambda").withDefault("0").withMinimum(1).create())
-            .withDescription("an increasing positive sequence of penalty coefficient, " +
-                    "with length n >= 0; if lambda is not specified, the sequence is chosen by algorithm.")
-            .create();
+        .withArgument(argumentBuilder.withName("lambda").withDefault("0").withMinimum(1).create())
+        .withDescription("an increasing positive sequence of penalty coefficient, " +
+            "with length n >= 0; if lambda is not specified, the sequence is chosen by algorithm.")
+        .create();
 
     Option alpha = builder.withLongName("alpha")
-            .withArgument(argumentBuilder.withName("alpha").withDefault("1").withMinimum(1).withMaximum(1).create())
-            .withDescription("the elastic-net coefficient with default value 1 (LASSO)")
-            .create();
+        .withArgument(argumentBuilder.withName("alpha").withDefault("1").withMinimum(1).withMaximum(1).create())
+        .withDescription("the elastic-net coefficient with default value 1 (LASSO)")
+        .create();
 
     Option bias = builder.withLongName("bias")
-            .withDescription("include a bias term")
-            .create();
+        .withDescription("include a bias term")
+        .create();
 
     Option numOfCV = builder.withLongName("numOfCV")
-            .withArgument(argumentBuilder.withName("numOfCV").withDefault("5").withMinimum(0).withMaximum(1).create())
-            .withDescription("number of cross validation, the rule of thumb is 5 or 10")
-            .create();
+        .withArgument(argumentBuilder.withName("numOfCV").withDefault("5").withMinimum(0).withMaximum(1).create())
+        .withDescription("number of cross validation, the rule of thumb is 5 or 10")
+        .create();
 
     Group normalArgs = new GroupBuilder()
-            .withOption(help)
-            .withOption(inputFile)
-            .withOption(outputFile)
-            .withOption(lambda)
-            .withOption(alpha)
-            .withOption(bias)
-            .withOption(numOfCV)
-            .create();
+        .withOption(help)
+        .withOption(inputFile)
+        .withOption(outputFile)
+        .withOption(lambda)
+        .withOption(alpha)
+        .withOption(bias)
+        .withOption(numOfCV)
+        .create();
 
     Parser parser = new Parser();
     parser.setHelpOption(help);
@@ -259,37 +257,36 @@ public class PenalizedLinearDriver extends AbstractJob {
     }
 
     parameter = new PenalizedLinearParameter();
-    parameter.setNumOfCV(Integer.parseInt((String)cmdLine.getValue(numOfCV)));
-    parameter.setAlpha(Float.parseFloat((String)cmdLine.getValue(alpha)));
+    parameter.setNumOfCV(Integer.parseInt((String) cmdLine.getValue(numOfCV)));
+    parameter.setAlpha(Float.parseFloat((String) cmdLine.getValue(alpha)));
     parameter.setIntercept(cmdLine.hasOption(bias));
 
-    if(!processLambda(parameter, cmdLine, lambda) || parameter.alpha < 0.0 || parameter.alpha > 1.0 || parameter.numOfCV < 1 || parameter.numOfCV > 20) {
-      log.error("please make sure the lambda sequence is positive and increasing, and 0.0 <= alphaValue <= 1.0 and 1 <= numofCV <= 20");
+    if (!processLambda(parameter, cmdLine, lambda) || parameter.alpha < 0.0 || parameter.alpha > 1.0 || parameter.numOfCV < 1 || parameter.numOfCV > 20) {
+      log.error("please make sure the lambda sequence is positive and increasing, and 0.0 <= alphaValue <= 1.0 and 1 <= numOfCV <= 20");
       return false;
     }
 
-    input = (String)cmdLine.getValue(inputFile);
-    output = (String)cmdLine.getValue(outputFile);
+    input = (String) cmdLine.getValue(inputFile);
+    output = (String) cmdLine.getValue(outputFile);
 
     return true;
   }
 
   boolean processLambda(PenalizedLinearParameter parameter, CommandLine cmdLine, Option lambda) {
-    String lambdaSeq = "";
+    StringBuilder lambdaSeq = new StringBuilder();
     double previous = Double.NEGATIVE_INFINITY;
-    if(cmdLine.hasOption(lambda)) {
+    if (cmdLine.hasOption(lambda)) {
       for (Object x : cmdLine.getValues(lambda)) {
         double number = Double.parseDouble(x.toString());
-        if(previous >= number || number < 0) {
+        if (previous >= number || number < 0) {
           return false;
         }
-        lambdaSeq += x.toString() + ",";
+        lambdaSeq.append(x.toString()).append(",");
         previous = number;
       }
       parameter.setLambda(lambdaSeq.substring(0, lambdaSeq.length() - 1));
       return true;
-    }
-    else {
+    } else {
       parameter.setLambda("");
       return true;
     }

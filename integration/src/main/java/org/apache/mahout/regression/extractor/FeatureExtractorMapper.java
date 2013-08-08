@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.mahout.regression.feature.extractor;
+package org.apache.mahout.regression.extractor;
 
+import com.google.common.collect.Lists;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -27,7 +28,6 @@ import org.apache.mahout.math.VectorWritable;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
@@ -35,12 +35,11 @@ import java.util.List;
  * This class converts white-spaced TEXT files or CSV files into
  * Mahout sequence files of VectorWritable suitable for input to the clustering jobs in
  * particular, and any Mahout job requiring this input in general.
- *
  */
 
 public class FeatureExtractorMapper extends Mapper<LongWritable, Text, Text, VectorWritable> {
 
-  List<Pair<Integer, Integer> > interactionPairList;
+  List<Pair<Integer, Integer>> interactionPairList;
   int[] independentID;
   int dependentID;
   String pattern;
@@ -68,21 +67,21 @@ public class FeatureExtractorMapper extends Mapper<LongWritable, Text, Text, Vec
     pattern = FeatureExtractUtility.SeparatorToPattern(separator);
     features = featureNames.trim().split(pattern);
     HashMap<String, Integer> featureMap = new HashMap<String, Integer>();
-    for(int i = 0;i < features.length; ++i) {
+    for (int i = 0; i < features.length; ++i) {
       featureMap.put(features[i], new Integer(i));
     }
-    if(selectedIndependent != null && !selectedIndependent.equals("")) {
+    if (selectedIndependent != null && !selectedIndependent.equals("")) {
       String[] independents = selectedIndependent.split(",");
       independentID = new int[independents.length];
-      for(int i = 0; i < independents.length; ++i) {
+      for (int i = 0; i < independents.length; ++i) {
         independentID[i] = featureMap.get(independents[i]);
       }
     }
 
-    if(selectedInteraction != null && !selectedInteraction.equals("")) {
+    if (selectedInteraction != null && !selectedInteraction.equals("")) {
       String[] interactions = selectedInteraction.split(",");
-      interactionPairList = new ArrayList<Pair<Integer, Integer>>();
-      for(int i = 0;i < interactions.length; ++i) {
+      interactionPairList = Lists.newArrayList();
+      for (int i = 0; i < interactions.length; ++i) {
         Integer first = new Integer(featureMap.get(interactions[i].split(":")[0]));
         Integer second = new Integer(featureMap.get(interactions[i].split(":")[1]));
         interactionPairList.add(new Pair<Integer, Integer>(first, second));
@@ -93,40 +92,37 @@ public class FeatureExtractorMapper extends Mapper<LongWritable, Text, Text, Vec
 
   @Override
   protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-    if(key.get() != 0L) {
+    if (key.get() != 0L) {
       String[] numberString = value.toString().trim().split(pattern);
       try {
         int size = 1;
-        if(interactionPairList != null) {
+        if (interactionPairList != null) {
           size += interactionPairList.size();
         }
-        if(independentID != null) {
+        if (independentID != null) {
           size += independentID.length;
         }
         Vector result = (Vector) constructor.newInstance(size);
         result.set(0, Double.valueOf(numberString[dependentID]));
         int index = 1;
-        if(independentID != null) {
-          for(int i = 0;i < independentID.length; ++i) {
+        if (independentID != null) {
+          for (int i = 0; i < independentID.length; ++i) {
             result.set(index++, Double.valueOf(numberString[independentID[i]]));
           }
         }
-        if(interactionPairList != null) {
-          for(int i = 0;i < interactionPairList.size(); ++i) {
+        if (interactionPairList != null) {
+          for (int i = 0; i < interactionPairList.size(); ++i) {
             Pair<Integer, Integer> pair = interactionPairList.get(i);
             result.set(index++, Double.valueOf(numberString[pair.getFirst()]) * Double.valueOf(numberString[pair.getSecond()]));
           }
         }
         VectorWritable vectorWritable = new VectorWritable(result);
         context.write(new Text(String.valueOf(index)), vectorWritable);
-      }
-      catch (InstantiationException e) {
+      } catch (InstantiationException e) {
         throw new IllegalStateException(e);
-      }
-      catch (IllegalAccessException e) {
+      } catch (IllegalAccessException e) {
         throw new IllegalStateException(e);
-      }
-      catch (InvocationTargetException e) {
+      } catch (InvocationTargetException e) {
         throw new IllegalStateException(e);
       }
     }
