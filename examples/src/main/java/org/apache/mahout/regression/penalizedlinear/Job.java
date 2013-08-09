@@ -17,15 +17,12 @@
 
 package org.apache.mahout.regression.penalizedlinear;
 
-import org.apache.commons.cli2.CommandLine;
-import org.apache.commons.cli2.Group;
 import org.apache.commons.cli2.Option;
 import org.apache.commons.cli2.builder.ArgumentBuilder;
 import org.apache.commons.cli2.builder.DefaultOptionBuilder;
-import org.apache.commons.cli2.builder.GroupBuilder;
-import org.apache.commons.cli2.commandline.Parser;
-import org.apache.commons.cli2.util.HelpFormatter;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.util.ToolRunner;
 import org.apache.mahout.clustering.conversion.InputDriver;
 
 import java.io.IOException;
@@ -39,17 +36,23 @@ public class Job extends PenalizedLinearDriver {
   private static final String DIRECTORY_CONTAINING_CONVERTED_INPUT = "data";
   private static final String DIRECTORY_CONTAINING_OUTPUT = "output";
   private static String[] jobArgs;
+  private static boolean validArgs;
 
   public static void main(String[] args) throws Exception {
-    if(parseJobArgs(args)) {
-      PenalizedLinearDriver.main(jobArgs);
-    }
+    ToolRunner.run(new Configuration(), new Job(), args);
   }
 
-  private static boolean parseJobArgs(String[] args) throws IOException, InterruptedException, ClassNotFoundException {
-    DefaultOptionBuilder builder = new DefaultOptionBuilder();
+  @Override
+  public int run(String[] args) throws Exception {
+    parseJobArgs(args);
+    if(validArgs) {
+      PenalizedLinearDriver.main(jobArgs);
+    }
+    return 0;
+  }
 
-    Option help = builder.withLongName("help").withDescription("print this list").create();
+  private void parseJobArgs(String[] args) throws IOException, InterruptedException, ClassNotFoundException {
+    DefaultOptionBuilder builder = new DefaultOptionBuilder();
 
     ArgumentBuilder argumentBuilder = new ArgumentBuilder();
     Option inputFile = builder.withLongName("input")
@@ -65,7 +68,7 @@ public class Job extends PenalizedLinearDriver {
             .create();
 
     Option lambda = builder.withLongName("lambda")
-            .withArgument(argumentBuilder.withName("lambda").withDefault("0").withMinimum(1).create())
+            .withArgument(argumentBuilder.withName("lambda").withDefault("").withMinimum(0).withMaximum(1).create())
             .withDescription("an increasing positive sequence of penalty coefficient, " +
                     "with length n >= 0; if lambda is not specified, the sequence is chosen by algorithm.")
             .create();
@@ -90,30 +93,22 @@ public class Job extends PenalizedLinearDriver {
                     "Mahout sequence files of VectorWritable suitable for input of Map-Reduce job.")
             .create();
 
-    Group normalArgs = new GroupBuilder()
-            .withOption(help)
-            .withOption(inputFile)
-            .withOption(outputFile)
-            .withOption(lambda)
-            .withOption(alpha)
-            .withOption(bias)
-            .withOption(numOfCV)
-            .withOption(convert)
-            .create();
-
-    Parser parser = new Parser();
-    parser.setHelpOption(help);
-    parser.setHelpTrigger("--help");
-    parser.setGroup(normalArgs);
-    parser.setHelpFormatter(new HelpFormatter(" ", "", " ", 130));
-    CommandLine cmdLine = parser.parseAndHelp(args);
-    if (cmdLine == null) {
-      return false;
+    addOption(inputFile);
+    addOption(outputFile);
+    addOption(bias);
+    addOption(lambda);
+    addOption(alpha);
+    addOption(numOfCV);
+    addOption(convert);
+    if(super.parseArguments(args) == null) {
+      validArgs = false;
+      return;
     }
 
-    Path input = new Path((String)cmdLine.getValue(inputFile));
-    Path output = new Path((String)cmdLine.getValue(outputFile), DIRECTORY_CONTAINING_CONVERTED_INPUT);
-    if(cmdLine.hasOption(convert)) {
+
+    Path input = new Path(getOption("input"));
+    Path output = new Path(getOption("output"), DIRECTORY_CONTAINING_CONVERTED_INPUT);
+    if(hasOption("convert")) {
       jobArgs = new String[args.length - 1];
       int index = 0;
       for(int i = 0;i < args.length; ++i) {
@@ -126,13 +121,13 @@ public class Job extends PenalizedLinearDriver {
           InputDriver.runJob(input, output, "org.apache.mahout.math.RandomAccessSparseVector");
         }
         if(args[i].equals("--output")) {
-          args[i + 1] = (new Path((String)cmdLine.getValue(outputFile), DIRECTORY_CONTAINING_OUTPUT)).toString();
+          args[i + 1] = (new Path(getOption("output"), DIRECTORY_CONTAINING_OUTPUT)).toString();
         }
       }
     }
     else {
       jobArgs = args;
     }
-    return true;
+    validArgs = true;
   }
 }

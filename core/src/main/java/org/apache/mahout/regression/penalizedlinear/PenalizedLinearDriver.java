@@ -17,21 +17,14 @@
 
 package org.apache.mahout.regression.penalizedlinear;
 
-import org.apache.commons.cli2.CommandLine;
-import org.apache.commons.cli2.Group;
 import org.apache.commons.cli2.Option;
 import org.apache.commons.cli2.builder.ArgumentBuilder;
 import org.apache.commons.cli2.builder.DefaultOptionBuilder;
-import org.apache.commons.cli2.builder.GroupBuilder;
-import org.apache.commons.cli2.commandline.Parser;
-import org.apache.commons.cli2.util.HelpFormatter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.mahout.common.AbstractJob;
@@ -183,6 +176,7 @@ public class PenalizedLinearDriver extends AbstractJob {
         VectorWritable.class,
         SequenceFileOutputFormat.class
     );
+    job.setCombinerClass(PenalizedLinearReducer.class);
     job.setJobName("Penalized Linear Regression Driver running over input: " + input);
     job.setNumReduceTasks(1);
     job.setJarByClass(PenalizedLinearDriver.class);
@@ -198,10 +192,8 @@ public class PenalizedLinearDriver extends AbstractJob {
     }
   }
 
-  private boolean parseArgs(String[] args) {
+  private boolean parseArgs(String[] args) throws IOException {
     DefaultOptionBuilder builder = new DefaultOptionBuilder();
-
-    Option help = builder.withLongName("help").withDescription("print this list").create();
 
     ArgumentBuilder argumentBuilder = new ArgumentBuilder();
     Option inputFile = builder.withLongName("input")
@@ -217,7 +209,7 @@ public class PenalizedLinearDriver extends AbstractJob {
         .create();
 
     Option lambda = builder.withLongName("lambda")
-        .withArgument(argumentBuilder.withName("lambda").withDefault("0").withMinimum(1).create())
+        .withArgument(argumentBuilder.withName("lambda").withDefault("").withMinimum(0).withMaximum(1).create())
         .withDescription("an increasing positive sequence of penalty coefficient, " +
             "with length n >= 0; if lambda is not specified, the sequence is chosen by algorithm.")
         .create();
@@ -236,52 +228,49 @@ public class PenalizedLinearDriver extends AbstractJob {
         .withDescription("number of cross validation, the rule of thumb is 5 or 10")
         .create();
 
-    Group normalArgs = new GroupBuilder()
-        .withOption(help)
-        .withOption(inputFile)
-        .withOption(outputFile)
-        .withOption(lambda)
-        .withOption(alpha)
-        .withOption(bias)
-        .withOption(numOfCV)
-        .create();
+    addOption(inputFile);
+    addOption(outputFile);
+    addOption(bias);
+    addOption(lambda);
+    addOption(alpha);
+    addOption(numOfCV);
 
-    Parser parser = new Parser();
-    parser.setHelpOption(help);
-    parser.setHelpTrigger("--help");
-    parser.setGroup(normalArgs);
-    parser.setHelpFormatter(new HelpFormatter(" ", "", " ", 130));
-    CommandLine cmdLine = parser.parseAndHelp(args);
-    if (cmdLine == null) {
+    if(super.parseArguments(args) == null) {
       return false;
     }
 
     parameter = new PenalizedLinearParameter();
-    parameter.setNumOfCV(Integer.parseInt((String) cmdLine.getValue(numOfCV)));
-    parameter.setAlpha(Float.parseFloat((String) cmdLine.getValue(alpha)));
-    parameter.setIntercept(cmdLine.hasOption(bias));
+    parameter.setNumOfCV(Integer.parseInt(getOption("numOfCV")));
+    parameter.setAlpha(Float.parseFloat(getOption("alpha")));
+    parameter.setIntercept(hasOption("bias"));
 
-    if (!processLambda(parameter, cmdLine, lambda) || parameter.alpha < 0.0 || parameter.alpha > 1.0 || parameter.numOfCV < 1 || parameter.numOfCV > 20) {
-      log.error("please make sure the lambda sequence is positive and increasing, and 0.0 <= alphaValue <= 1.0 and 1 <= numOfCV <= 20");
+    if (!processLambda(parameter) ||
+            parameter.alpha < 0.0 || parameter.alpha > 1.0 ||
+            parameter.numOfCV < 1 || parameter.numOfCV > 20) {
+      log.error("please make sure the lambda sequence is positive and increasing, and 0.0 <= alphaValue <= 1.0 and 1 <= numofCV <= 20");
       return false;
     }
 
-    input = (String) cmdLine.getValue(inputFile);
-    output = (String) cmdLine.getValue(outputFile);
+    input = getOption("input");
+    output = getOption("output");
 
     return true;
   }
 
-  boolean processLambda(PenalizedLinearParameter parameter, CommandLine cmdLine, Option lambda) {
-    StringBuilder lambdaSeq = new StringBuilder();
+  boolean processLambda(PenalizedLinearParameter parameter) {
+    String lambdaSeq = "";
     double previous = Double.NEGATIVE_INFINITY;
-    if (cmdLine.hasOption(lambda)) {
-      for (Object x : cmdLine.getValues(lambda)) {
+    if (hasOption("lambda")) {
+      if(getOptions("lambda") == null || getOption("lambda").equals("")) {
+        parameter.setLambda("");
+        return true;
+      }
+      for (Object x : getOption("lambda").split("\\s*,\\s*")) {
         double number = Double.parseDouble(x.toString());
         if (previous >= number || number < 0) {
           return false;
         }
-        lambdaSeq.append(x.toString()).append(",");
+        lambdaSeq += x.toString() + ",";
         previous = number;
       }
       parameter.setLambda(lambdaSeq.substring(0, lambdaSeq.length() - 1));

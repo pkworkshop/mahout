@@ -41,6 +41,8 @@ public class PenalizedLinearReducer extends Reducer<Text, VectorWritable, Text, 
       valueLen = (5 * dimension + dimension * dimension) / 2 + 3;
       rowMatrix = new double[valueLen];
     }
+    //This line is necessary: for different key, rowMatrix needs to be initialized. Use "new" is not efficient.
+    Arrays.fill(rowMatrix, 0.0);
     for (VectorWritable value : values) {
       Vector vector = value.get();
       rowMatrix[valueLen - 1] += vector.get(valueLen - 1);

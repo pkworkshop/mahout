@@ -17,14 +17,9 @@
 
 package org.apache.mahout.regression.penalizedlinear;
 
-import org.apache.commons.cli2.CommandLine;
-import org.apache.commons.cli2.Group;
 import org.apache.commons.cli2.Option;
 import org.apache.commons.cli2.builder.ArgumentBuilder;
 import org.apache.commons.cli2.builder.DefaultOptionBuilder;
-import org.apache.commons.cli2.builder.GroupBuilder;
-import org.apache.commons.cli2.commandline.Parser;
-import org.apache.commons.cli2.util.HelpFormatter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -42,7 +37,6 @@ import org.apache.mahout.regression.feature.extractor.FeatureExtractorKeySet;
 import org.apache.mahout.regression.feature.extractor.FeatureExtractorMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 import java.io.*;
 import java.util.Set;
@@ -137,27 +131,29 @@ public class LinearCrossValidation extends AbstractJob {
   }
 
   private void runPenalizedLinear() throws IOException, InterruptedException, ClassNotFoundException {
-    Configuration conf = getConf();
+    Job job = prepareJob(
+            new Path(output, DIRECTORY_CONTAINING_CONVERTED_INPUT),
+            new Path(output, "output"),
+            SequenceFileInputFormat.class,
+            PenalizedLinearMapper.class,
+            Text.class,
+            VectorWritable.class,
+            PenalizedLinearReducer.class,
+            Text.class,
+            VectorWritable.class,
+            SequenceFileOutputFormat.class
+    );
+    job.setCombinerClass(PenalizedLinearReducer.class);
+    job.setJobName("Penalized Linear Regression Driver running over input: " + input);
+    job.setNumReduceTasks(1);
+    job.setJarByClass(PenalizedLinearDriver.class);
+
+    Configuration conf = job.getConfiguration();
     conf.setInt(PenalizedLinearKeySet.NUM_CV, parameter.numOfCV);
     conf.setFloat(PenalizedLinearKeySet.ALPHA, parameter.alpha);
     conf.set(PenalizedLinearKeySet.LAMBDA, parameter.lambda);
     conf.setBoolean(PenalizedLinearKeySet.INTERCEPT, parameter.intercept);
 
-    Job job = new Job(conf, "Penalized Linear Regression Driver running over input: " + input);
-    job.setInputFormatClass(SequenceFileInputFormat.class);
-    job.setOutputFormatClass(SequenceFileOutputFormat.class);
-    job.setMapperClass(PenalizedLinearMapper.class);
-    job.setMapOutputKeyClass(Text.class);
-    job.setMapOutputValueClass(VectorWritable.class);
-    job.setReducerClass(PenalizedLinearReducer.class);
-    job.setOutputKeyClass(Text.class);
-    job.setOutputValueClass(VectorWritable.class);
-    job.setCombinerClass(PenalizedLinearReducer.class);
-    job.setNumReduceTasks(1);
-    job.setJarByClass(LinearRegularizePath.class);
-
-    FileInputFormat.addInputPath(job, new Path(output, DIRECTORY_CONTAINING_CONVERTED_INPUT));
-    FileOutputFormat.setOutputPath(job, new Path(output, "output"));
     if (!job.waitForCompletion(true)) {
       throw new InterruptedException("Penalized Linear Regression Job failed processing " + input);
     }
@@ -235,10 +231,8 @@ public class LinearCrossValidation extends AbstractJob {
     }
   }
 
-  private boolean parseArgs(String[] args) {
+  private boolean parseArgs(String[] args) throws IOException {
     DefaultOptionBuilder builder = new DefaultOptionBuilder();
-
-    Option help = builder.withLongName("help").withDescription("print this list").create();
 
     ArgumentBuilder argumentBuilder = new ArgumentBuilder();
     Option inputFile = builder.withLongName("input")
@@ -276,7 +270,7 @@ public class LinearCrossValidation extends AbstractJob {
         .create();
 
     Option lambda = builder.withLongName("lambda")
-        .withArgument(argumentBuilder.withName("lambda").withDefault("0").withMinimum(1).create())
+        .withArgument(argumentBuilder.withName("lambda").withDefault("").withMinimum(0).withMaximum(1).create())
         .withDescription("an increasing positive sequence of penalty coefficient, " +
             "with length n >= 0; if lambda is not specified, the sequence is chosen by algorithm.")
         .create();
@@ -291,60 +285,48 @@ public class LinearCrossValidation extends AbstractJob {
         .withDescription("number of cross validation, the rule of thumb is 5 or 10")
         .create();
 
-    Group normalArgs = new GroupBuilder()
-        .withOption(help)
-        .withOption(inputFile)
-        .withOption(outputFile)
-        .withOption(dependent)
-        .withOption(independent)
-        .withOption(interaction)
-        .withOption(bias)
-        .withOption(lambda)
-        .withOption(alpha)
-        .withOption(numOfCV)
-        .create();
+    addOption(inputFile);
+    addOption(outputFile);
+    addOption(dependent);
+    addOption(independent);
+    addOption(interaction);
+    addOption(bias);
+    addOption(lambda);
+    addOption(alpha);
+    addOption(numOfCV);
 
-    Parser parser = new Parser();
-    parser.setHelpOption(help);
-    parser.setHelpTrigger("--help");
-    parser.setGroup(normalArgs);
-    parser.setHelpFormatter(new HelpFormatter(" ", "", " ", 130));
-    CommandLine cmdLine = parser.parseAndHelp(args);
-    if (cmdLine == null) {
+    if(super.parseArguments(args) == null) {
       return false;
     }
 
     parameter = new LinearCrossValidationParameter();
-    parameter.numOfCV = Integer.parseInt((String) cmdLine.getValue(numOfCV));
-    parameter.alpha = Float.parseFloat((String) cmdLine.getValue(alpha));
-    parameter.intercept = cmdLine.hasOption(bias);
-    parameter.dependent = (String) cmdLine.getValue(dependent);
-    String independentString = "";
-    for (Object x : cmdLine.getValues(independent)) {
-      independentString += x.toString() + ",";
-    }
-    parameter.independent = independentString.substring(0, Math.max(independentString.length() - 1, 0));
-    String interactionString = "";
-    for (Object x : cmdLine.getValues(interaction)) {
-      interactionString += x.toString() + ",";
-    }
-    parameter.interaction = interactionString.substring(0, Math.max(interactionString.length() - 1, 0));
-
-    if (!processLambda(parameter, cmdLine, lambda) || parameter.alpha < 0.0 || parameter.alpha > 1.0 || parameter.numOfCV < 1 || parameter.numOfCV > 20) {
+    parameter.numOfCV = Integer.parseInt(getOption("numOfCV"));
+    parameter.alpha = Float.parseFloat(getOption("alpha"));
+    parameter.intercept = hasOption("bias");
+    parameter.dependent = getOption("dependent");
+    parameter.independent = getOption("independent") == null ? "" : getOption("independent");
+    parameter.interaction = getOption("interaction") == null ? "" : getOption("interaction");
+    if (!processLambda(parameter) ||
+            parameter.alpha < 0.0 || parameter.alpha > 1.0 ||
+            parameter.numOfCV < 1 || parameter.numOfCV > 20) {
       log.error("please make sure the lambda sequence is positive and increasing, and 0.0 <= alphaValue <= 1.0 and 1 <= numofCV <= 20");
       return false;
     }
 
-    input = (String) cmdLine.getValue(inputFile);
-    output = (String) cmdLine.getValue(outputFile);
+    input = getOption("input");
+    output = getOption("output");
     return true;
   }
 
-  private boolean processLambda(LinearCrossValidationParameter parameter, CommandLine cmdLine, Option lambda) {
+  private boolean processLambda(LinearCrossValidationParameter parameter) {
     String lambdaSeq = "";
     double previous = Double.NEGATIVE_INFINITY;
-    if (cmdLine.hasOption(lambda)) {
-      for (Object x : cmdLine.getValues(lambda)) {
+    if (hasOption("lambda")) {
+      if(getOptions("lambda") == null || getOption("lambda").equals("")) {
+        parameter.lambda = "";
+        return true;
+      }
+      for (Object x : getOption("lambda").split("\\s*,\\s*")) {
         double number = Double.parseDouble(x.toString());
         if (previous >= number || number < 0) {
           return false;

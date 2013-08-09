@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.mahout.regression.extractor;
+package org.apache.mahout.regression.feature.extractor;
 
 public class FeatureExtractUtility {
   /**

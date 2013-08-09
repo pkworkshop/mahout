@@ -446,13 +446,14 @@ public class PenalizedLinearSolver {
           rowMatrix[index] = (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) * rowMatrix[index] +
               vector.get(valueLen - 1) / rowMatrix[valueLen - 1] * vector.get(index) +
               (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
-                  (vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
-                  (rowMatrix[dimension + 1 + i] - vector.get(dimension + 1 + i)) *
-                  (rowMatrix[dimension + 1 + j] - vector.get(dimension + 1 + j));
+              (vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
+              (rowMatrix[dimension + 1 + i] - vector.get(dimension + 1 + i)) *
+              (rowMatrix[dimension + 1 + j] - vector.get(dimension + 1 + j));
           ++index;
         }
       }
-      rowMatrix[index] = rowMatrix[index] + vector.get(valueLen - 1) / (rowMatrix[valueLen - 1]) * (vector.get(index) - rowMatrix[index]);
+      rowMatrix[index] = rowMatrix[index] + vector.get(valueLen - 1)
+              / (rowMatrix[valueLen - 1]) * (vector.get(index) - rowMatrix[index]);
       for (int i = 0; i < dimension; ++i) {
         rowMatrix[dimension + 1 + i] = rowMatrix[dimension + 1 + i] +
             vector.get(valueLen - 1) / (rowMatrix[valueLen - 1]) * (vector.get(dimension + 1 + i) - rowMatrix[dimension + 1 + i]);
@@ -485,9 +486,9 @@ public class PenalizedLinearSolver {
             rowMatrix[index] = (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) * rowMatrix[index] +
                 vector.get(valueLen - 1) / rowMatrix[valueLen - 1] * vector.get(index) +
                 (1 - vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
-                    (vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
-                    (rowMatrix[dimension + 1 + i] - vector.get(dimension + 1 + i)) *
-                    (rowMatrix[dimension + 1 + j] - vector.get(dimension + 1 + j));
+                (vector.get(valueLen - 1) / rowMatrix[valueLen - 1]) *
+                (rowMatrix[dimension + 1 + i] - vector.get(dimension + 1 + i)) *
+                (rowMatrix[dimension + 1 + j] - vector.get(dimension + 1 + j));
             ++index;
           }
         }

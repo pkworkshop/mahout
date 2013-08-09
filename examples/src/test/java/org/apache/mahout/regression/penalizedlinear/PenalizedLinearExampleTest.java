@@ -36,10 +36,9 @@ public class PenalizedLinearExampleTest extends MahoutTestCase {
           {1.5, 2.6, 1.3},
           {1.1, 2.4, -1.2}
   };
-  private static final String INDEPENDENT = "B";
-  private static final String INTERACTION = "B:C";
+  private static final String INDEPENDENT = "B,C";
+  private static final String INTERACTION = "B:C,B:B";
   private static final String DEPENDENT = "A";
-  private static final String SEP = FeatureExtractUtility.ExtensionToSeparator("txt");
 
   @Test
   public void testCrossValidation() throws Exception {
@@ -72,7 +71,7 @@ public class PenalizedLinearExampleTest extends MahoutTestCase {
             "--input", getTestTempFilePath("testdata/file12.txt").toString(),
             "--output", getTestTempFilePath("testdata/file22").toString(),
             "--dependent", DEPENDENT,
-            "--independent", INDEPENDENT,
+            "--independent", DEPENDENT,
             "--interaction", INTERACTION,
             "--alpha", "0.3",
             "--bias"};
